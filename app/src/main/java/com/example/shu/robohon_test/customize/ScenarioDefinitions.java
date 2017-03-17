@@ -43,6 +43,10 @@ public class ScenarioDefinitions {
      */
     public static final String FUNC_READ_FIRST = "read_first";
     /**
+     * function：次の記事を読む.
+     */
+    public static final String FUNC_READ_NEXT = "read_next";
+    /**
      * Package名.
      */
     protected static final String PACKAGE = "com.example.shu.robohon_test";
