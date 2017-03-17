@@ -6,34 +6,23 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.PowerManager;
-import android.os.AsyncTask;
 import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.Toolbar;
+import android.widget.ImageView;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 
 import com.example.shu.robohon_test.customize.ScenarioDefinitions;
+import com.example.shu.robohon_test.util.FetchArticles;
+import com.example.shu.robohon_test.util.FetchImage;
 import com.example.shu.robohon_test.util.VoiceUIManagerUtil;
 import com.example.shu.robohon_test.util.VoiceUIVariableUtil.VoiceUIVariableListHelper;
 
-import org.apache.commons.io.IOUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLPeerUnverifiedException;
 
 import jp.co.sharp.android.rb.projectormanager.ProjectorManagerServiceUtil;
 import jp.co.sharp.android.voiceui.VoiceUIManager;
@@ -69,13 +58,15 @@ public class MainActivity extends Activity implements MainActivityVoiceUIListene
     /**
      * 排他制御用.
      */
-    private Object mLock = new Object();
+    private final Object mLock = new Object();
     /**
      * プロジェクタ照射状態.
      */
     private boolean isProjected = false;
 
+    private int currentIndex;
     private JSONArray articles = null;
+    private ImageView imageView = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,30 +74,43 @@ public class MainActivity extends Activity implements MainActivityVoiceUIListene
         Log.v(TAG, "onCreate()");
         setContentView(R.layout.activity_main);
 
-        //タイトルバー設定.
+        // タイトルバー設定.
         setupTitleBar();
 
-        //ホームボタンの検知登録.
+        // ホームボタンの検知登録.
         mHomeEventReceiver = new HomeEventReceiver();
         IntentFilter filterHome = new IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS);
         registerReceiver(mHomeEventReceiver, filterHome);
 
-        //VoiceUI再起動の検知登録.
+        // VoiceUI再起動の検知登録.
         mVoiceUIStartReceiver = new VoiceUIStartReceiver();
         IntentFilter filter = new IntentFilter(VoiceUIManager.ACTION_VOICEUI_SERVICE_STARTED);
         registerReceiver(mVoiceUIStartReceiver, filter);
 
-        //TODO プロジェクタイベントの検知登録(プロジェクター利用時のみ).
+        // プロジェクタイベントの検知登録(プロジェクター利用時のみ).
         setProjectorEventReceiver();
 
-        //発話ボタンの実装.
-        Button Button = (Button) findViewById(R.id.accost);
-        Button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                execAsync();
-            }
-        });
+        // 発話ボタンの実装.
+//        Button Button = (Button) findViewById(R.id.accost);
+//        Button.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                execAsync();
+//            }
+//        });
+
+//        Button projButton = (Button) findViewById(R.id.projector);
+//        projButton.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                if(!isProjected) {
+//                    startService(getIntentForProjector());
+//                }
+//            }
+//        });
+
+        currentIndex = 0;
+        imageView = (ImageView) findViewById(R.id.imageView);
 
         execAsync();
     }
@@ -153,16 +157,16 @@ public class MainActivity extends Activity implements MainActivityVoiceUIListene
         super.onDestroy();
         Log.v(TAG, "onDestroy()");
 
-        //ホームボタンの検知破棄.
+        // ホームボタンの検知破棄.
         this.unregisterReceiver(mHomeEventReceiver);
 
-        //VoiceUI再起動の検知破棄.
+        // VoiceUI再起動の検知破棄.
         this.unregisterReceiver(mVoiceUIStartReceiver);
 
-        //TODO プロジェクタイベントの検知破棄(プロジェクター利用時のみ).
+        // プロジェクタイベントの検知破棄(プロジェクター利用時のみ).
         this.unregisterReceiver(mProjectorEventReceiver);
 
-        //インスタンスのごみ掃除.
+        // インスタンスのごみ掃除.
         mVoiceUIManager = null;
         mMainActivityVoiceUIListener = null;
         mProjectorEventReceiver = null;
@@ -179,10 +183,13 @@ public class MainActivity extends Activity implements MainActivityVoiceUIListene
                 finish();
                 break;
             case ScenarioDefinitions.FUNC_START_PROJECTOR:
-                //TODO プロジェクタマネージャの開始(プロジェクター利用時のみ).
+                // プロジェクタマネージャの開始(プロジェクター利用時のみ).
                 if(!isProjected) {
                     startService(getIntentForProjector());
                 }
+                break;
+            case ScenarioDefinitions.FUNC_READ_NEXT:
+                readNext();
                 break;
             case ScenarioDefinitions.FUNC_READ_FIRST:
                 readArticle(0);
@@ -195,8 +202,8 @@ public class MainActivity extends Activity implements MainActivityVoiceUIListene
      * タイトルバーを設定する.
      */
     private void setupTitleBar() {
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setActionBar(toolbar);
+//        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+//        setActionBar(toolbar);
     }
 
     /**
@@ -333,26 +340,9 @@ public class MainActivity extends Activity implements MainActivityVoiceUIListene
     }
 
     private void execAsync() {
-        AsyncTask<Void, Void, JSONArray> task = new AsyncTask<Void, Void, JSONArray>() {
+        FetchArticles task = new FetchArticles(new FetchArticles.Callback() {
             @Override
-            protected JSONArray doInBackground(Void... params) {
-                JSONArray articles = getArticles();
-                String title = null;
-                String content = null;
-
-//                try {
-//                    title = article.getString("title") + "。";
-//                    content = article.getString("content");
-//                    content = content.replaceAll("<.+?>", "");
-//                } catch (JSONException e) {
-//                    Log.e(TAG, e.getMessage());
-//                }
-
-                return articles;
-            }
-
-            @Override
-            protected void onPostExecute(JSONArray result) {
+            public void onFinished(JSONArray result) {
                 articles = result;
                 if (mVoiceUIManager != null) {
                     VoiceUIVariableListHelper helper = new VoiceUIVariableListHelper();
@@ -360,60 +350,55 @@ public class MainActivity extends Activity implements MainActivityVoiceUIListene
                     VoiceUIManagerUtil.updateAppInfo(mVoiceUIManager, helper.getVariableList(), true);
                 }
             }
-        };
+        });
+
         task.execute();
     }
 
-    private JSONArray getArticles() {
-        JSONArray result = null;
-        String apiUrl = "https://api.yokotv.com/api/Articles";
-        Date today = new Date();
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-        String todayStr = dateFormat.format(today);
-        String params = "?filter[where][startDate][lte]="+todayStr+"&filter[where][endDate][gte]="+todayStr+"&filter[limit]=20&filter[include]=images";
-
-        try {
-            URL url = new URL(apiUrl+params);
-
-            HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
-
-            connection.setRequestMethod("GET");
-            connection.connect();
-            int resCode = connection.getResponseCode();
-
-            if (resCode == HttpsURLConnection.HTTP_OK) {
-                Log.v(TAG, "Http OK");
-                InputStream is = connection.getInputStream();
-                String res = IOUtils.toString(is, StandardCharsets.UTF_8);
-                result = new JSONArray(res);
-                is.close();
-            }
-        } catch(MalformedURLException e) {
-            Log.e(TAG, e.getMessage());
-        } catch(IOException e) {
-            Log.e(TAG, e.getMessage());
-        } catch(JSONException e) {
-            Log.e(TAG, e.getMessage());
-        }
-        return result;
+    private void readArticle() {
+        int tempIndex = (int) (Math.random() * articles.length());
+        readArticle(tempIndex);
     }
 
     private void readArticle(int index) {
-        try {
-            int tempIndex = (int) (Math.random() * articles.length());
-            JSONObject article = (JSONObject) articles.get(tempIndex);
-            String title = article.getString("title") + "。";
-            String content = article.getString("content");
-            content = content.replaceAll("<.+?>", "");
+        currentIndex = index;
+//        imageView.setImageBitmap();
 
-            if (mVoiceUIManager != null) {
-                VoiceUIVariableListHelper helper = new VoiceUIVariableListHelper();
-                helper.addAccost(ScenarioDefinitions.ACC_READ);
-                helper.addStringValue("content", title+content);
-                VoiceUIManagerUtil.updateAppInfo(mVoiceUIManager, helper.getVariableList(), true);
-            }
+        try {
+            JSONObject article = (JSONObject) articles.get(index);
+            final String title = article.getString("title") + "。";
+            final String content = article.getString("content").replaceAll("<.+?>", "").replaceAll("\\n", "。");
+            JSONArray images = article.getJSONArray("images");
+            JSONObject image = images.getJSONObject(0);
+
+            String imageUrl = "https://api.yokotv.com/api/Media/" + image.getString("container") + "/download/" + image.getString("filename");
+            FetchImage fetchImageTask = new FetchImage(imageUrl, new FetchImage.Callback() {
+                @Override
+                public void onFinished(Bitmap bitmap) {
+                    imageView.setImageBitmap(bitmap);
+
+                    if (mVoiceUIManager != null) {
+                        VoiceUIVariableListHelper helper = new VoiceUIVariableListHelper();
+                        helper.addAccost(ScenarioDefinitions.ACC_READ);
+                        helper.addStringValue("content", title + content);
+                        VoiceUIManagerUtil.updateAppInfo(mVoiceUIManager, helper.getVariableList(), true);
+                    }
+                }
+            });
+            fetchImageTask.execute();
+
         } catch (JSONException e) {
             Log.e(TAG, e.getMessage());
         }
+    }
+
+    private void readNext() {
+        currentIndex = currentIndex + 1;
+        Log.v(TAG, Integer.toString(currentIndex));
+        readArticle(currentIndex);
+    }
+
+    private boolean isReady() {
+        return articles != null;
     }
 }

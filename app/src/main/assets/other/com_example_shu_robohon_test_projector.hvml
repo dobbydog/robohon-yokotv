@@ -6,7 +6,7 @@
     <!--TODO プロジェクターを起動したい場合はscene_disableをscene_commonに変更してください -->
     <scene value="com.example.shu.robohon_test.scene_common"/>
     <version value="1.0"/>
-    <situation priority="75" topic_id="start" trigger="user-word">${Lvcsr:Basic} include [プロジェクト,プロジェクタ] and ${Lvcsr:Basic} include [開始,解し,会し,起動,移し,写し,映し]</situation>
+    <situation priority="50" topic_id="start" trigger="user-word">${Lvcsr:Basic} include [プロジェクト,プロジェクタ] and ${Lvcsr:Basic} include [開始,解し,会し,起動,移し,写し,映し]</situation>
   </head>
   <body>
     <topic id="start" listen="false">

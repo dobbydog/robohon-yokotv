@@ -5,7 +5,7 @@
     <description>アプリを終了するためのシナリオ</description>
     <scene value="com.example.shu.robohon_test.scene_common"/>
     <version value="1.0"/>
-    <situation priority="61" topic_id="accept" trigger="user-word">アプリ in ${Lvcsr:Basic} and ${Lvcsr:Basic} include [終了,終わ]</situation>
+    <situation priority="61" topic_id="accept" trigger="user-word">よこてれび in ${Lvcsr:Basic} and ${Lvcsr:Basic} include [終了,終わ]</situation>
     <accost priority="74" topic_id="execute" word="com.example.shu.robohon_test.app_end.execute"/>
   </head>
   <body>
@@ -18,7 +18,7 @@
     </topic>
     <topic id="execute" listen="false">
       <action index="1">
-        <speech>アプリを終了するね</speech>
+        <speech>よこてれびを終了するね</speech>
         <behavior id="assign" type="normal"/>
         <control function="end_app" target="com.example.shu.robohon_test"/>
       </action>
